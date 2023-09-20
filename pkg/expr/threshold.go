@@ -12,40 +12,57 @@ import (
 )
 
 type ThresholdCommand struct {
-	ReferenceVar  string
-	RefID         string
-	ThresholdFunc string
-	Conditions    []float64
+	ReferenceVar string
+	RefID        string
+	predicate    predicate
 }
 
+type thresholdFunc string
+
+type rangeThresholdFunc string
+
 const (
-	ThresholdIsAbove        = "gt"
-	ThresholdIsBelow        = "lt"
-	ThresholdIsWithinRange  = "within_range"
-	ThresholdIsOutsideRange = "outside_range"
+	ThresholdIsAbove        thresholdFunc      = "gt"
+	ThresholdIsBelow        thresholdFunc      = "lt"
+	ThresholdIsWithinRange  rangeThresholdFunc = "within_range"
+	ThresholdIsOutsideRange rangeThresholdFunc = "outside_range"
 )
 
 var (
-	supportedThresholdFuncs = []string{ThresholdIsAbove, ThresholdIsBelow, ThresholdIsWithinRange, ThresholdIsOutsideRange}
+	supportedThresholdFuncs = []string{string(ThresholdIsAbove), string(ThresholdIsBelow), string(ThresholdIsWithinRange), string(ThresholdIsOutsideRange)}
 )
 
 func NewThresholdCommand(refID, referenceVar, thresholdFunc string, conditions []float64) (*ThresholdCommand, error) {
-	switch thresholdFunc {
-	case ThresholdIsOutsideRange, ThresholdIsWithinRange:
+	var predicate predicate
+	switch strings.ToLower(thresholdFunc) {
+	case string(ThresholdIsOutsideRange):
 		if len(conditions) < 2 {
-			return nil, fmt.Errorf("incorrect number of arguments: got %d but need 2", len(conditions))
+			return nil, fmt.Errorf("incorrect number of arguments for threshold function '%s': got %d but need 2", thresholdFunc, len(conditions))
 		}
-	case ThresholdIsAbove, ThresholdIsBelow:
+		predicate = outsideRangePredicate{left: conditions[0], right: conditions[1]}
+	case string(ThresholdIsWithinRange):
+		if len(conditions) < 2 {
+			return nil, fmt.Errorf("incorrect number of arguments for threshold function '%s': got %d but need 2", thresholdFunc, len(conditions))
+		}
+		predicate = withinRangePredicate{left: conditions[0], right: conditions[1]}
+	case string(ThresholdIsAbove):
 		if len(conditions) < 1 {
-			return nil, fmt.Errorf("incorrect number of arguments: got %d but need 1", len(conditions))
+			return nil, fmt.Errorf("incorrect number of arguments for threshold function '%s': got %d but need 1", thresholdFunc, len(conditions))
 		}
+		predicate = greaterThanPredicate{value: conditions[0]}
+	case string(ThresholdIsBelow):
+		if len(conditions) < 1 {
+			return nil, fmt.Errorf("incorrect number of arguments for threshold function '%s': got %d but need 1", thresholdFunc, len(conditions))
+		}
+		predicate = lessThanPredicate{value: conditions[0]}
+	default:
+		return nil, fmt.Errorf("expected threshold function to be one of [%s], got %s", strings.Join(supportedThresholdFuncs, ", "), thresholdFunc)
 	}
 
 	return &ThresholdCommand{
-		RefID:         refID,
-		ReferenceVar:  referenceVar,
-		ThresholdFunc: thresholdFunc,
-		Conditions:    conditions,
+		RefID:        refID,
+		ReferenceVar: referenceVar,
+		predicate:    predicate,
 	}, nil
 }
 
@@ -101,34 +118,46 @@ func (tc *ThresholdCommand) NeedsVars() []string {
 	return []string{tc.ReferenceVar}
 }
 
-func (tc *ThresholdCommand) Execute(ctx context.Context, now time.Time, vars mathexp.Vars, tracer tracing.Tracer) (mathexp.Results, error) {
-	mathExpression, err := createMathExpression(tc.ReferenceVar, tc.ThresholdFunc, tc.Conditions)
-	if err != nil {
-		return mathexp.Results{}, err
+func (tc *ThresholdCommand) Execute(ctx context.Context, _ time.Time, vars mathexp.Vars, tracer tracing.Tracer) (mathexp.Results, error) {
+	_, span := tracer.Start(ctx, "SSE.ExecuteThreshold")
+	defer span.End()
+
+	eval := func(maybeValue *float64) *float64 {
+		if maybeValue == nil {
+			return nil
+		}
+		var result float64
+		if tc.predicate.Eval(*maybeValue) {
+			result = 1
+		}
+		return &result
 	}
 
-	mathCommand, err := NewMathCommand(tc.ReferenceVar, mathExpression)
-	if err != nil {
-		return mathexp.Results{}, err
+	refVar := vars[tc.ReferenceVar]
+	newRes := mathexp.Results{Values: make(mathexp.Values, 0, len(refVar.Values))}
+	for _, val := range refVar.Values {
+		switch v := val.(type) {
+		case mathexp.Series:
+			s := mathexp.NewSeries(tc.RefID, v.GetLabels(), v.Len())
+			for i := 0; i < v.Len(); i++ {
+				t, value := s.GetPoint(i)
+				s.SetPoint(i, t, eval(value))
+			}
+			newRes.Values = append(newRes.Values, s)
+		case mathexp.Number:
+			copyV := mathexp.NewNumber(tc.RefID, v.GetLabels())
+			copyV.SetValue(eval(v.GetFloat64Value()))
+			newRes.Values = append(newRes.Values, copyV)
+		case mathexp.Scalar:
+			copyV := mathexp.NewScalar(tc.RefID, eval(v.GetFloat64Value()))
+			newRes.Values = append(newRes.Values, copyV)
+		case mathexp.NoData:
+			newRes.Values = append(newRes.Values, mathexp.NewNoData())
+		default:
+			return newRes, fmt.Errorf("can only reduce type series, got type %v", val.Type())
+		}
 	}
-
-	return mathCommand.Execute(ctx, now, vars, tracer)
-}
-
-// createMathExpression converts all the info we have about a "threshold" expression in to a Math expression
-func createMathExpression(referenceVar string, thresholdFunc string, args []float64) (string, error) {
-	switch thresholdFunc {
-	case ThresholdIsAbove:
-		return fmt.Sprintf("${%s} > %f", referenceVar, args[0]), nil
-	case ThresholdIsBelow:
-		return fmt.Sprintf("${%s} < %f", referenceVar, args[0]), nil
-	case ThresholdIsWithinRange:
-		return fmt.Sprintf("${%s} > %f && ${%s} < %f", referenceVar, args[0], referenceVar, args[1]), nil
-	case ThresholdIsOutsideRange:
-		return fmt.Sprintf("${%s} < %f || ${%s} > %f", referenceVar, args[0], referenceVar, args[1]), nil
-	default:
-		return "", fmt.Errorf("failed to evaluate threshold expression: no such threshold function %s", thresholdFunc)
-	}
+	return newRes, nil
 }
 
 func IsSupportedThresholdFunc(name string) bool {
@@ -141,4 +170,59 @@ func IsSupportedThresholdFunc(name string) bool {
 	}
 
 	return isSupported
+}
+
+type predicate interface {
+	Eval(f float64) bool
+	Intersect(p predicate) bool
+}
+
+type withinRangePredicate struct {
+	left  float64
+	right float64
+}
+
+func (r withinRangePredicate) Eval(f float64) bool {
+	return f > r.left && f < r.right
+}
+
+func (r withinRangePredicate) Intersect(p predicate) bool {
+	return p.Eval(r.left+1) || p.Eval(r.right-1) || p.Intersect(r)
+}
+
+type outsideRangePredicate struct {
+	left  float64
+	right float64
+}
+
+func (r outsideRangePredicate) Eval(f float64) bool {
+	return f < r.left || f > r.right
+}
+
+func (r outsideRangePredicate) Intersect(p predicate) bool {
+	return p.Eval(r.left-1) || p.Eval(r.right+1) || p.Intersect(r)
+}
+
+type lessThanPredicate struct {
+	value float64
+}
+
+func (r lessThanPredicate) Eval(f float64) bool {
+	return r.value < f
+}
+
+func (r lessThanPredicate) Intersect(p predicate) bool {
+	return p.Eval(r.value+1) || p.Intersect(r)
+}
+
+type greaterThanPredicate struct {
+	value float64
+}
+
+func (r greaterThanPredicate) Eval(f float64) bool {
+	return r.value > f
+}
+
+func (r greaterThanPredicate) Intersect(p predicate) bool {
+	return p.Eval(r.value-1) || p.Intersect(r)
 }
