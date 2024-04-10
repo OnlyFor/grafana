@@ -180,4 +180,5 @@ export interface FeatureToggles {
   oauthRequireSubClaim?: boolean;
   newDashboardWithFiltersAndGroupBy?: boolean;
   cloudWatchNewLabelParsing?: boolean;
+  disableNumericMetricsSortingInExpressions?: boolean;
 }

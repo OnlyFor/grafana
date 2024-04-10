@@ -654,4 +654,8 @@ const (
 	// FlagCloudWatchNewLabelParsing
 	// Updates CloudWatch label parsing to be more accurate
 	FlagCloudWatchNewLabelParsing = "cloudWatchNewLabelParsing"
+
+	// FlagDisableNumericMetricsSortingInExpressions
+	// In server-side expressions, disable the sorting of numeric-kind metrics by their metric name or labels.
+	FlagDisableNumericMetricsSortingInExpressions = "disableNumericMetricsSortingInExpressions"
 )

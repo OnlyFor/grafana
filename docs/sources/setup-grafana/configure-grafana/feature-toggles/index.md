@@ -176,6 +176,7 @@ Experimental features might be changed or removed without prior notice.
 | `kubernetesAggregator`                      | Enable grafana aggregator                                                                                                                                                                                                                                                         |
 | `expressionParser`                          | Enable new expression parser                                                                                                                                                                                                                                                      |
 | `usePrometheusFrontendPackage`              | Use the @grafana/prometheus frontend package in core Prometheus.                                                                                                                                                                                                                  |
+| `disableNumericMetricsSortingInExpressions` | In server-side expressions, disable the sorting of numeric-kind metrics by their metric name or labels.                                                                                                                                                                           |
 
 ## Development feature toggles
 

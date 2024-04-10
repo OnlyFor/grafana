@@ -2086,6 +2086,19 @@
         "frontend": true,
         "allowSelfServe": true
       }
+    },
+    {
+      "metadata": {
+        "name": "disableNumericMetricsSortingInExpressions",
+        "resourceVersion": "1712848028142",
+        "creationTimestamp": "2024-04-11T15:07:08Z"
+      },
+      "spec": {
+        "description": "In server-side expressions, disable the sorting of numeric-kind metrics by their metric name or labels.",
+        "stage": "experimental",
+        "codeowner": "@grafana/observability-metrics",
+        "requiresRestart": true
+      }
     }
   ]
 }
