@@ -321,12 +321,16 @@ func (a *alertRule) Run(key ngmodels.AlertRuleKey) error {
 
 func (a *alertRule) evaluate(ctx context.Context, key ngmodels.AlertRuleKey, f fingerprint, attempt int64, e *Evaluation, span trace.Span, retry bool) error {
 	orgID := fmt.Sprint(key.OrgID)
+	evalAttemptTotal := a.metrics.EvalAttemptTotal.WithLabelValues(orgID)
+	evalAttemptFailures := a.metrics.EvalAttemptFailures.WithLabelValues(orgID)
 	evalTotalFailures := a.metrics.EvalFailures.WithLabelValues(orgID)
 	processDuration := a.metrics.ProcessDuration.WithLabelValues(orgID)
 	sendDuration := a.metrics.SendDuration.WithLabelValues(orgID)
 
 	logger := a.logger.FromContext(ctx).New("version", e.rule.Version, "fingerprint", f, "attempt", attempt, "now", e.scheduledAt).FromContext(ctx)
 	start := a.clock.Now()
+
+	evalAttemptTotal.Inc()
 
 	evalCtx := eval.NewContextWithPreviousResults(ctx, SchedulerUserFor(e.rule.OrgID), a.newLoadedMetricsReader(e.rule))
 	ruleEval, err := a.evalFactory.Create(evalCtx, e.rule.GetEvalCondition())
@@ -350,6 +354,8 @@ func (a *alertRule) evaluate(ctx context.Context, key ngmodels.AlertRuleKey, f f
 	}
 
 	if err != nil || results.HasErrors() {
+		evalAttemptFailures.Inc()
+
 		// Only retry (return errors) if this isn't the last attempt, otherwise skip these return operations.
 		if retry {
 			// The only thing that can return non-nil `err` from ruleEval.Evaluate is the server side expression pipeline.
