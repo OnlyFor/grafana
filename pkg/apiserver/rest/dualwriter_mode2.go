@@ -35,21 +35,23 @@ func (d *DualWriterMode2) Create(ctx context.Context, obj runtime.Object, create
 		return created, err
 	}
 
-	c, err := enrichObject(obj, created)
+	accessorCreat, err := meta.Accessor(created)
 	if err != nil {
 		return created, err
 	}
 
-	accessor, err := meta.Accessor(c)
+	accessorOld, err := meta.Accessor(obj)
 	if err != nil {
 		return created, err
 	}
+
+	enrichObject(accessorOld, accessorCreat)
 
 	// create method expects an empty resource version
-	accessor.SetResourceVersion("")
-	accessor.SetUID("")
+	accessorCreat.SetResourceVersion("")
+	accessorCreat.SetUID("")
 
-	rsp, err := d.Storage.Create(ctx, c, createValidation, options)
+	rsp, err := d.Storage.Create(ctx, created, createValidation, options)
 	if err != nil {
 		klog.FromContext(ctx).Error(err, "unable to create object in Storage", "mode", 2)
 	}
@@ -124,16 +126,7 @@ func (d *DualWriterMode2) List(ctx context.Context, options *metainternalversion
 	return ll, nil
 }
 
-func enrichObject(orig, copy runtime.Object) (runtime.Object, error) {
-	accessorC, err := meta.Accessor(copy)
-	if err != nil {
-		return nil, err
-	}
-	accessorO, err := meta.Accessor(orig)
-	if err != nil {
-		return nil, err
-	}
-
+func enrichObject(accessorO, accessorC metav1.Object) {
 	accessorC.SetLabels(accessorO.GetLabels())
 
 	ac := accessorC.GetAnnotations()
@@ -141,8 +134,6 @@ func enrichObject(orig, copy runtime.Object) (runtime.Object, error) {
 		ac[k] = v
 	}
 	accessorC.SetAnnotations(ac)
-
-	return copy, nil
 }
 
 // Update overrides the generic behavior of the Storage and writes first to the legacy storage and then to US.
@@ -153,8 +144,9 @@ func (d *DualWriterMode2) Update(ctx context.Context, name string, objInfo rest.
 	}
 
 	// get old and new (updated) object so they can be stored in legacy store
-	old, err := d.Get(ctx, name, &metav1.GetOptions{})
+	old, err := d.Storage.Get(ctx, name, &metav1.GetOptions{})
 	if err != nil {
+		klog.FromContext(ctx).Error(err, "object not found in US for update", "mode", Mode2)
 		return nil, false, err
 	}
 
@@ -169,12 +161,7 @@ func (d *DualWriterMode2) Update(ctx context.Context, name string, objInfo rest.
 		return obj, created, err
 	}
 
-	o, err := enrichObject(updated, obj)
-	if err != nil {
-		return obj, false, err
-	}
-
-	accessor, err := meta.Accessor(o)
+	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return nil, false, err
 	}
@@ -184,12 +171,14 @@ func (d *DualWriterMode2) Update(ctx context.Context, name string, objInfo rest.
 		return nil, false, err
 	}
 
+	enrichObject(accessorOld, accessor)
+
 	// keep the same UID and resource_version
 	accessor.SetResourceVersion(accessorOld.GetResourceVersion())
 	accessor.SetUID(accessorOld.GetUID())
 	objInfo = &updateWrapper{
 		upstream: objInfo,
-		updated:  o,
+		updated:  obj,
 	}
 
 	return d.Storage.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
