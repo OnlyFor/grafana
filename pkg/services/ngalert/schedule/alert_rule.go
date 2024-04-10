@@ -233,28 +233,28 @@ func (a *alertRule) Run(key ngmodels.AlertRuleKey) error {
 					a.evalApplied(key, ctx.scheduledAt)
 				}()
 
-				for attempt := int64(1); attempt <= a.maxAttempts; attempt++ {
-					isPaused := ctx.rule.IsPaused
-					f := ruleWithFolder{ctx.rule, ctx.folderTitle}.Fingerprint()
-					// Do not clean up state if the eval loop has just started.
-					var needReset bool
-					if currentFingerprint != 0 && currentFingerprint != f {
-						logger.Debug("Got a new version of alert rule. Clear up the state", "fingerprint", f)
-						needReset = true
-					}
-					// We need to reset state if the loop has started and the alert is already paused. It can happen,
-					// if we have an alert with state and we do file provision with stateful Grafana, that state
-					// lingers in DB and won't be cleaned up until next alert rule update.
-					needReset = needReset || (currentFingerprint == 0 && isPaused)
-					if needReset {
-						a.resetState(grafanaCtx, key, isPaused)
-					}
-					currentFingerprint = f
-					if isPaused {
-						logger.Debug("Skip rule evaluation because it is paused")
-						return
-					}
+				isPaused := ctx.rule.IsPaused
+				f := ruleWithFolder{ctx.rule, ctx.folderTitle}.Fingerprint()
+				// Do not clean up state if the eval loop has just started.
+				var needReset bool
+				if currentFingerprint != 0 && currentFingerprint != f {
+					logger.Debug("Got a new version of alert rule. Clear up the state", "fingerprint", f)
+					needReset = true
+				}
+				// We need to reset state if the loop has started and the alert is already paused. It can happen,
+				// if we have an alert with state and we do file provision with stateful Grafana, that state
+				// lingers in DB and won't be cleaned up until next alert rule update.
+				needReset = needReset || (currentFingerprint == 0 && isPaused)
+				if needReset {
+					a.resetState(grafanaCtx, key, isPaused)
+				}
+				currentFingerprint = f
+				if isPaused {
+					logger.Debug("Skip rule evaluation because it is paused")
+					return
+				}
 
+				for attempt := int64(1); attempt <= a.maxAttempts; attempt++ {
 					fpStr := currentFingerprint.String()
 					utcTick := ctx.scheduledAt.UTC().Format(time.RFC3339Nano)
 					tracingCtx, span := a.tracer.Start(grafanaCtx, "alert rule execution", trace.WithAttributes(
