@@ -32,19 +32,5 @@ func (d *DualWriterMode4) Get(ctx context.Context, name string, options *metav1.
 
 // Update overrides the generic behavior of the Storage and writes only to US.
 func (d *DualWriterMode4) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
-	old, err := d.Storage.Get(ctx, name, &metav1.GetOptions{})
-	if err != nil {
-		return nil, false, err
-	}
-
-	updated, err := objInfo.UpdatedObject(ctx, old)
-	if err != nil {
-		return nil, false, err
-	}
-	objInfo = &updateWrapper{
-		upstream: objInfo,
-		updated:  updated,
-	}
-
 	return d.Storage.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
 }
