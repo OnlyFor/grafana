@@ -68,6 +68,8 @@ type DualWriter struct {
 
 var errDualWriterCreaterMissing = errors.New("legacy storage rest.Creater is missing")
 var errDualWriterListerMissing = errors.New("legacy storage rest.Lister is missing")
+var errNoUpdateMethod = errors.New("legacy storage rest.Updater is missing")
+var errNoGetMethod = errors.New("legacy storage rest.Getter is missing")
 
 type DualWriterMode int
 
