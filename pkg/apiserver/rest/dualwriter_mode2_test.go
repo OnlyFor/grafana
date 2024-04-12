@@ -61,4 +61,15 @@ func TestMode2(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, k, v.Foo)
 	}
+
+	// DeleteCollection: it should delete from both LegacyStorage and Storage
+	_, err = dw.DeleteCollection(
+		context.Background(),
+		func(context.Context, runtime.Object) error { return nil },
+		&metav1.DeleteOptions{},
+		&metainternalversion.ListOptions{},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, lsSpy.Counts("LegacyStorage.DeleteCollection"))
+	assert.Equal(t, 1, sSpy.Counts("Storage.DeleteCollection"))
 }
