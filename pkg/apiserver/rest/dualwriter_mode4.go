@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -28,4 +29,9 @@ func (d *DualWriterMode4) Create(ctx context.Context, obj runtime.Object, create
 // Get overrides the behavior of the generic DualWriter and retrieves an object from Storage.
 func (d *DualWriterMode4) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	return d.Storage.Get(ctx, name, &metav1.GetOptions{})
+}
+
+// DeleteCollection overrides the behavior of the generic DualWriter and deletes only from Storage.
+func (d *DualWriterMode4) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *metainternalversion.ListOptions) (runtime.Object, error) {
+	return d.Storage.DeleteCollection(ctx, deleteValidation, options, listOptions)
 }

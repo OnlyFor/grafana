@@ -35,4 +35,15 @@ func TestMode4(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, lsSpy.Counts("LegacyStorage.List"))
 	assert.Equal(t, 1, sSpy.Counts("Storage.List"))
+
+	// DeleteCollection: it should use the Storage DeleteCollection implementation
+	_, err = dw.DeleteCollection(
+		context.Background(),
+		func(context.Context, runtime.Object) error { return nil },
+		&metav1.DeleteOptions{},
+		&metainternalversion.ListOptions{},
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, lsSpy.Counts("LegacyStorage.DeleteCollection"))
+	assert.Equal(t, 1, sSpy.Counts("Storage.DeleteCollection"))
 }
