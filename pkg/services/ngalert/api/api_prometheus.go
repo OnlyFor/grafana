@@ -61,6 +61,20 @@ func (srv PrometheusSrv) RouteGetAlertStatuses(c *contextmodel.ReqContext) respo
 	// As we are using req.Form directly, this triggers a call to ParseForm() if needed.
 	c.Query("")
 
+	resp := PrepareAlertStatuses(srv.manager, AlertStatusesOptions{
+		OrgID: c.SignedInUser.GetOrgID(),
+		Query: c.Req.Form,
+	})
+
+	return response.JSON(resp.HTTPStatusCode(), resp)
+}
+
+type AlertStatusesOptions struct {
+	OrgID int64
+	Query url.Values
+}
+
+func PrepareAlertStatuses(manager state.AlertInstanceManager, opts AlertStatusesOptions) apimodels.AlertResponse {
 	alertResponse := apimodels.AlertResponse{
 		DiscoveryBase: apimodels.DiscoveryBase{
 			Status: "success",
@@ -71,11 +85,11 @@ func (srv PrometheusSrv) RouteGetAlertStatuses(c *contextmodel.ReqContext) respo
 	}
 
 	var labelOptions []ngmodels.LabelOption
-	if !getBoolWithDefault(c.Req.Form, queryIncludeInternalLabels, false) {
+	if !getBoolWithDefault(opts.Query, queryIncludeInternalLabels, false) {
 		labelOptions = append(labelOptions, ngmodels.WithoutInternalLabels())
 	}
 
-	for _, alertState := range srv.manager.GetAll(c.SignedInUser.GetOrgID()) {
+	for _, alertState := range manager.GetAll(opts.OrgID) {
 		startsAt := alertState.StartsAt
 		valString := ""
 
@@ -95,7 +109,7 @@ func (srv PrometheusSrv) RouteGetAlertStatuses(c *contextmodel.ReqContext) respo
 		})
 	}
 
-	return response.JSON(alertResponse.HTTPStatusCode(), alertResponse)
+	return alertResponse
 }
 
 func formatValues(alertState *state.State) string {
