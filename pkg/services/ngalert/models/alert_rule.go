@@ -14,8 +14,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	alertingModels "github.com/grafana/alerting/models"
+
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+
+	alertingModels "github.com/grafana/alerting/models"
 
 	"github.com/grafana/grafana/pkg/services/quota"
 	"github.com/grafana/grafana/pkg/setting"
@@ -428,6 +430,10 @@ type AlertRuleGroupKey struct {
 	RuleGroup    string
 }
 
+func (k AlertRuleGroupKey) LogContext() []any {
+	return []any{"org_id", k.OrgID, "namespace_uid", k.NamespaceUID, "rule_group", k.RuleGroup}
+}
+
 func (k AlertRuleGroupKey) String() string {
 	return fmt.Sprintf("{orgID: %d, namespaceUID: %s, groupName: %s}", k.OrgID, k.NamespaceUID, k.RuleGroup)
 }
@@ -598,6 +604,12 @@ type GetAlertRuleByUIDQuery struct {
 // GetAlertRulesGroupByRuleUIDQuery is the query for retrieving a group of alerts by UID of a rule that belongs to that group
 type GetAlertRulesGroupByRuleUIDQuery struct {
 	UID   string
+	OrgID int64
+}
+
+// GetAlertRulesGroupsByRuleUIDsQuery is the query for retrieving all groups of alerts that contain any of the rule UIDs provided.
+type GetAlertRulesGroupsByRuleUIDsQuery struct {
+	UIDs  []string
 	OrgID int64
 }
 
