@@ -175,43 +175,6 @@ func (f *RuleStore) GetAlertRulesGroupByRuleUID(_ context.Context, q *models.Get
 	return ruleList, nil
 }
 
-func (f *RuleStore) GetAlertRulesGroupsByRuleUIDs(_ context.Context, q *models.GetAlertRulesGroupsByRuleUIDsQuery) (map[models.AlertRuleGroupKey]models.RulesGroup, error) {
-	f.mtx.Lock()
-	defer f.mtx.Unlock()
-	f.RecordedOps = append(f.RecordedOps, *q)
-	if err := f.Hook(*q); err != nil {
-		return nil, err
-	}
-	rules, ok := f.Rules[q.OrgID]
-	if !ok {
-		return nil, nil
-	}
-
-	uids := make(map[string]struct{}, len(q.UIDs))
-	for _, uid := range q.UIDs {
-		uids[uid] = struct{}{}
-	}
-
-	result := make(map[models.AlertRuleGroupKey]models.RulesGroup)
-	for _, rule := range rules {
-		if _, ok := uids[rule.UID]; ok {
-			groupKey := rule.GetGroupKey()
-			result[groupKey] = models.RulesGroup{}
-		}
-	}
-	if len(result) == 0 {
-		return result, nil
-	}
-
-	for _, rule := range rules {
-		groupKey := rule.GetGroupKey()
-		if _, ok := result[groupKey]; ok {
-			result[groupKey] = append(result[groupKey], rule)
-		}
-	}
-	return result, nil
-}
-
 func (f *RuleStore) ListAlertRules(_ context.Context, q *models.ListAlertRulesQuery) (models.RulesGroup, error) {
 	f.mtx.Lock()
 	defer f.mtx.Unlock()
@@ -221,13 +184,13 @@ func (f *RuleStore) ListAlertRules(_ context.Context, q *models.ListAlertRulesQu
 		return nil, err
 	}
 
-	hasDashboard := func(r *models.AlertRule, dashboardUID string, panelID int64) bool {
-		if dashboardUID != "" {
-			if r.DashboardUID == nil || *r.DashboardUID != dashboardUID {
+	hasDashboard := func(r *models.AlertRule) bool {
+		if q.DashboardUID != "" {
+			if r.DashboardUID == nil || *r.DashboardUID != q.DashboardUID {
 				return false
 			}
-			if panelID > 0 {
-				if r.PanelID == nil || *r.PanelID != panelID {
+			if q.PanelID > 0 {
+				if r.PanelID == nil || *r.PanelID != q.PanelID {
 					return false
 				}
 			}
@@ -235,28 +198,32 @@ func (f *RuleStore) ListAlertRules(_ context.Context, q *models.ListAlertRulesQu
 		return true
 	}
 
-	hasNamespace := func(r *models.AlertRule, namespaceUIDs []string) bool {
-		if len(namespaceUIDs) > 0 {
-			var ok bool
-			for _, uid := range q.NamespaceUIDs {
-				if uid == r.NamespaceUID {
-					ok = true
-					break
+	fieldIn := func(field func(r *models.AlertRule) string, in []string) func(r *models.AlertRule) bool {
+		return func(r *models.AlertRule) bool {
+			if len(in) > 0 {
+				for _, v := range in {
+					if field(r) == v {
+						return true
+					}
 				}
-			}
-			if !ok {
 				return false
 			}
+			return true
 		}
-		return true
 	}
+
+	hasNamespace := fieldIn(func(r *models.AlertRule) string { return r.NamespaceUID }, q.NamespaceUIDs)
+	hasRuleUID := fieldIn(func(r *models.AlertRule) string { return r.UID }, q.RuleUIDs)
 
 	ruleList := models.RulesGroup{}
 	for _, r := range f.Rules[q.OrgID] {
-		if !hasDashboard(r, q.DashboardUID, q.PanelID) {
+		if !hasDashboard(r) {
 			continue
 		}
-		if !hasNamespace(r, q.NamespaceUIDs) {
+		if !hasNamespace(r) {
+			continue
+		}
+		if !hasRuleUID(r) {
 			continue
 		}
 		if q.RuleGroup != "" && r.RuleGroup != q.RuleGroup {

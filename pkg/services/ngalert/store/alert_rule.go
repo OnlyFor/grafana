@@ -120,29 +120,6 @@ func (st DBstore) GetAlertRulesGroupByRuleUID(ctx context.Context, query *ngmode
 	return result, err
 }
 
-// GetAlertRulesGroupsByRuleUIDs is a handler for retrieving groups of alert rules from that database by UIDs and organisation ID of any rule that belong to the groups.
-func (st DBstore) GetAlertRulesGroupsByRuleUIDs(ctx context.Context, query *ngmodels.GetAlertRulesGroupsByRuleUIDsQuery) (map[ngmodels.AlertRuleGroupKey]ngmodels.RulesGroup, error) {
-	var rules []*ngmodels.AlertRule
-	err := st.SQLStore.WithDbSession(ctx, func(sess *db.Session) error {
-		err := sess.Table("alert_rule").Alias("a").Join(
-			"INNER",
-			"alert_rule AS b", "a.org_id = b.org_id AND a.namespace_uid = b.namespace_uid AND a.rule_group = b.rule_group",
-		).Where("a.org_id = ?", query.OrgID).In("b.uid", query.UIDs).Distinct("a.*").Asc("a.namespace_uid", "a.rule_group", "a.rule_group_idx", "a.id").Find(&rules)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	// Group rules by rule group
-	result := make(map[ngmodels.AlertRuleGroupKey]ngmodels.RulesGroup)
-	for _, rule := range rules {
-		groupKey := rule.GetGroupKey()
-		result[groupKey] = append(result[groupKey], rule)
-	}
-	return result, err
-}
-
 // InsertAlertRules is a handler for creating/updating alert rules.
 // Returns the UID and ID of rules that were created in the same order as the input rules.
 func (st DBstore) InsertAlertRules(ctx context.Context, rules []ngmodels.AlertRule) ([]ngmodels.AlertRuleKeyWithId, error) {
@@ -393,6 +370,14 @@ func (st DBstore) ListAlertRules(ctx context.Context, query *ngmodels.ListAlertR
 				in = append(in, "?")
 			}
 			q = q.Where(fmt.Sprintf("namespace_uid IN (%s)", strings.Join(in, ",")), args...)
+		}
+
+		if len(query.RuleUIDs) > 0 {
+			args := make([]any, 0, len(query.RuleUIDs))
+			for _, ruleUID := range query.RuleUIDs {
+				args = append(args, ruleUID)
+			}
+			q = q.Where("uid IN (?"+strings.Repeat(" ,?", len(query.RuleUIDs)-1)+")", args...)
 		}
 
 		if query.RuleGroup != "" {
