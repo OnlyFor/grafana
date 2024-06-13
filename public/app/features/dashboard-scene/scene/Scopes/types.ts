@@ -1,4 +1,4 @@
-import { ScopeNodeSpec } from '@grafana/data';
+import { ScopeDashboardBinding, ScopeNodeSpec } from '@grafana/data';
 
 export interface Node extends ScopeNodeSpec {
   name: string;
@@ -10,3 +10,9 @@ export interface Node extends ScopeNodeSpec {
 }
 
 export type NodesMap = Record<string, Node>;
+
+export interface SuggestedDashboard {
+  dashboard: string;
+  dashboardTitle: string;
+  items: ScopeDashboardBinding[];
+}

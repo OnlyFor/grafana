@@ -1,7 +1,7 @@
 import { Scope, ScopeSpec, ScopeNode, ScopeDashboardBinding } from '@grafana/data';
 import { config, getBackendSrv } from '@grafana/runtime';
 import { ScopedResourceClient } from 'app/features/apiserver/client';
-import { NodesMap } from 'app/features/dashboard-scene/scene/Scopes/types';
+import { NodesMap, SuggestedDashboard } from 'app/features/dashboard-scene/scene/Scopes/types';
 
 const group = 'scope.grafana.app';
 const version = 'v0alpha1';
@@ -100,4 +100,24 @@ export async function fetchDashboards(scopes: Scope[]): Promise<ScopeDashboardBi
   } catch (err) {
     return [];
   }
+}
+
+export async function fetchSuggestedDashboards(scopes: Scope[]): Promise<SuggestedDashboard[]> {
+  const items = await fetchDashboards(scopes);
+
+  return Object.values(
+    items.reduce<Record<string, SuggestedDashboard>>((acc, item) => {
+      if (!acc[item.spec.dashboard]) {
+        acc[item.spec.dashboard] = {
+          dashboard: item.spec.dashboard,
+          dashboardTitle: item.spec.dashboardTitle,
+          items: [],
+        };
+      }
+
+      acc[item.spec.dashboard].items.push(item);
+
+      return acc;
+    }, {})
+  );
 }
