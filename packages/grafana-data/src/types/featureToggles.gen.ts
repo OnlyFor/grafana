@@ -194,4 +194,5 @@ export interface FeatureToggles {
   azureMonitorPrometheusExemplars?: boolean;
   pinNavItems?: boolean;
   authZGRPCServer?: boolean;
+  scopeDashboards?: boolean;
 }

@@ -710,4 +710,8 @@ const (
 	// FlagAuthZGRPCServer
 	// Enables the gRPC server for authorization
 	FlagAuthZGRPCServer = "authZGRPCServer"
+
+	// FlagScopeDashboards
+	// Enables the passing of scopes to dashboards fetching in Grafana
+	FlagScopeDashboards = "scopeDashboards"
 )
