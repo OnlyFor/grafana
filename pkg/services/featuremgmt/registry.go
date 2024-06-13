@@ -1317,6 +1317,13 @@ var (
 			HideFromAdminPage: true,
 			HideFromDocs:      true,
 		},
+		{
+			Name:        "databaseReadReplica",
+			Description: "Use a read replica for some database queries.",
+			Stage:       FeatureStageExperimental,
+			Owner:       grafanaBackendServicesSquad,
+			Expression:  "false", // enabled by default
+		},
 	}
 )
 

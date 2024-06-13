@@ -710,4 +710,8 @@ const (
 	// FlagAuthZGRPCServer
 	// Enables the gRPC server for authorization
 	FlagAuthZGRPCServer = "authZGRPCServer"
+
+	// FlagDatabaseReadReplica
+	// Use a read replica for some database queries.
+	FlagDatabaseReadReplica = "databaseReadReplica"
 )
