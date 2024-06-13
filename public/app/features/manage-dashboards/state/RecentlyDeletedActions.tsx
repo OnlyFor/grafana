@@ -3,13 +3,14 @@ import React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data/';
 import { Button, useStyles2 } from '@grafana/ui';
+import { PAGE_SIZE } from 'app/features/browse-dashboards/api/services';
 
 import appEvents from '../../../core/app_events';
 import { Trans } from '../../../core/internationalization';
 import { useDispatch } from '../../../types';
 import { ShowModalReactEvent } from '../../../types/events';
 import { useRestoreDashboardMutation } from '../../browse-dashboards/api/browseDashboardsAPI';
-import { setAllSelection, useActionSelectionState } from '../../browse-dashboards/state';
+import { refetchChildren, setAllSelection, useActionSelectionState } from '../../browse-dashboards/state';
 import { RestoreModal } from '../components/RestoreModal';
 import { useRecentlyDeletedStateManager } from '../utils/useRecentlyDeletedStateManager';
 
@@ -29,10 +30,33 @@ export function RecentlyDeletedActions() {
   };
 
   const onRestore = async () => {
-    const promises = Object.entries(selectedItems.dashboard)
+    const resultsView = stateManager.state.result?.view.toArray();
+    if (!resultsView) {
+      return;
+    }
+
+    const uids = Object.entries(selectedItems.dashboard)
       .filter(([_, selected]) => selected)
-      .map(([uid]) => restoreDashboard({ dashboardUID: uid }));
+      .map((v) => v[0]);
+
+    const promises = uids.map((uid) => {
+      return restoreDashboard({ dashboardUID: uid });
+    });
+
     await Promise.all(promises);
+
+    const parentUIDs = uids.map((uid) => resultsView.find((v) => v.uid === uid)?.location);
+    const refreshedParents = new Set<string | undefined>();
+
+    for (const parentUID of parentUIDs) {
+      if (refreshedParents.has(parentUID)) {
+        continue;
+      }
+
+      refreshedParents.add(parentUID);
+      dispatch(refetchChildren({ parentUID, pageSize: PAGE_SIZE }));
+    }
+
     onActionComplete();
   };
 
