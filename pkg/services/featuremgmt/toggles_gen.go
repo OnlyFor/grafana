@@ -711,7 +711,7 @@ const (
 	// Enables the gRPC server for authorization
 	FlagAuthZGRPCServer = "authZGRPCServer"
 
-	// FlagScopeDashboards
+	// FlagPassScopeToDashboardApi
 	// Enables the passing of scopes to dashboards fetching in Grafana
-	FlagScopeDashboards = "scopeDashboards"
+	FlagPassScopeToDashboardApi = "passScopeToDashboardApi"
 )

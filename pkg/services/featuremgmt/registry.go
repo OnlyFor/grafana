@@ -1318,7 +1318,7 @@ var (
 			HideFromDocs:      true,
 		},
 		{
-			Name:              "scopeDashboards",
+			Name:              "passScopeToDashboardApi",
 			Description:       "Enables the passing of scopes to dashboards fetching in Grafana",
 			FrontendOnly:      false,
 			Stage:             FeatureStageExperimental,
