@@ -154,7 +154,7 @@ func (ss *SQLStore) initReadOnlyEngine(engine *xorm.Engine) error {
 		engine.SetLogger(&xorm.DiscardLogger{})
 	} else {
 		// add stack to database calls to be able to see what repository initiated queries. Top 7 items from the stack as they are likely in the xorm library.
-		engine.SetLogger(NewXormLogger(log.LvlInfo, log.WithSuffix(log.New("sqlstore.xorm"), log.CallerContextKey, log.StackCaller(log.DefaultCallerDepth))))
+		engine.SetLogger(NewXormLogger(log.LvlInfo, log.WithSuffix(log.New("replsstore.xorm"), log.CallerContextKey, log.StackCaller(log.DefaultCallerDepth))))
 		engine.ShowSQL(true)
 		engine.ShowExecTime(true)
 	}
@@ -192,7 +192,6 @@ func ProvideServiceWithReadReplicaForTests(t sqlutil.ITestDB, cfg *setting.Cfg, 
 
 func initTestReadReplDB(t sqlutil.ITestDB, testCfg *setting.Cfg, features featuremgmt.FeatureToggles) (*SQLStore, error) {
 	t.Helper()
-
 	if testReadReplStore == nil {
 		dbType := sqlutil.GetTestDBType()
 
