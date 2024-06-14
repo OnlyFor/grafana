@@ -47,7 +47,6 @@ func (rs ReplStore) ReadReplica() *SQLStore {
 func ProvideServiceWithReadReplica(cfg *setting.Cfg,
 	features featuremgmt.FeatureToggles, migrations registry.DatabaseMigrator,
 	bus bus.Bus, tracer tracing.Tracer) (*ReplStore, error) {
-
 	// start with an initialized SQLStore
 	ss, err := ProvideService(cfg, features, migrations, bus, tracer)
 	if err != nil {
