@@ -19,6 +19,10 @@ import (
 	"github.com/grafana/grafana/pkg/setting"
 )
 
+var (
+	testReadReplStore *SQLStore
+)
+
 // ReplStore is a wrapper around a main SQLStore and a read-only SQLStore. The
 // main SQLStore is anonymous, so the ReplStore may be used directly as a
 // SQLStore.
@@ -145,7 +149,7 @@ func (ss *SQLStore) initReadOnlyEngine(engine *xorm.Engine) error {
 	engine.SetConnMaxLifetime(time.Second * time.Duration(ss.dbCfg.ConnMaxLifetime))
 
 	// configure sql logging
-	debugSQL := ss.cfg.Raw.Section("database").Key("log_queries").MustBool(false)
+	debugSQL := ss.cfg.Raw.Section("database_replica").Key("log_queries").MustBool(false)
 	if !debugSQL {
 		engine.SetLogger(&xorm.DiscardLogger{})
 	} else {
@@ -182,8 +186,78 @@ func ProvideServiceWithReadReplicaForTests(t sqlutil.ITestDB, cfg *setting.Cfg, 
 	if err != nil {
 		return nil, err
 	}
-	rs, err := newReadOnlySQLStore(cfg, features, ss.bus, ss.tracer)
+	rs, err := initTestReadReplDB(t, cfg, features)
 	return &ReplStore{ss, rs}, err
+}
+
+func initTestReadReplDB(t sqlutil.ITestDB, testCfg *setting.Cfg, features featuremgmt.FeatureToggles) (*SQLStore, error) {
+	t.Helper()
+
+	if testReadReplStore == nil {
+		dbType := sqlutil.GetTestDBType()
+
+		// set test db config
+		cfg := setting.NewCfg()
+		// nolint:staticcheck
+		cfg.IsFeatureToggleEnabled = features.IsEnabledGlobally
+
+		sec, err := cfg.Raw.NewSection("database_replica")
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := sec.NewKey("type", dbType); err != nil {
+			return nil, err
+		}
+
+		testDB, err := sqlutil.GetTestDB(dbType)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := sec.NewKey("connection_string", testDB.ConnStr); err != nil {
+			return nil, err
+		}
+		if _, err := sec.NewKey("path", testDB.Path); err != nil {
+			return nil, err
+		}
+
+		if testCfg.Raw.HasSection("database_replica") {
+			testSec, err := testCfg.Raw.GetSection("database_replica")
+			if err == nil {
+				// copy from testCfg to the Cfg keys that do not exist
+				for _, k := range testSec.Keys() {
+					if sec.HasKey(k.Name()) {
+						continue
+					}
+					if _, err := sec.NewKey(k.Name(), k.Value()); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+
+		// create engine
+		engine, err := xorm.NewEngine(dbType, sec.Key("connection_string").String())
+		if err != nil {
+			return nil, err
+		}
+
+		engine.DatabaseTZ = time.UTC
+		engine.TZLocation = time.UTC
+
+		tracer := tracing.InitializeTracerForTest()
+		bus := bus.ProvideBus(tracer)
+		testReadReplStore, err = newReadOnlySQLStore(cfg, features, bus, tracer)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// nolint:staticcheck
+	testReadReplStore.cfg.IsFeatureToggleEnabled = features.IsEnabledGlobally
+
+	return testReadReplStore, nil
 }
 
 // InitTestDB initializes the test DB.
@@ -196,9 +270,12 @@ func InitTestReplDB(t sqlutil.ITestDB, opts ...InitTestDBOpt) (*ReplStore, *sett
 	if err != nil {
 		t.Fatalf("failed to initialize sql repl store: %s", err)
 	}
-	rs, err := newReadOnlySQLStore(cfg, features, ss.bus, ss.tracer)
-	if err != nil {
-		t.Fatalf("failed to initialize sql repl store: %s", err)
+	if features.IsEnabledGlobally(featuremgmt.FlagDatabaseReadReplica) {
+		rs, err := newReadOnlySQLStore(cfg, features, ss.bus, ss.tracer)
+		if err != nil {
+			t.Fatalf("failed to initialize sql repl store: %s", err)
+		}
+		return &ReplStore{ss, rs}, cfg
 	}
-	return &ReplStore{ss, rs}, cfg
+	return &ReplStore{ss, nil}, cfg
 }

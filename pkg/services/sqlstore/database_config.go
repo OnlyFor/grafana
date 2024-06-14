@@ -207,6 +207,7 @@ func (dbCfg *DatabaseConfig) buildConnectionString(cfg *setting.Cfg, features fe
 		cnnstr += buildExtraConnectionString('&', dbCfg.UrlQueryParams)
 	default:
 		return fmt.Errorf("unknown database type: %s", dbCfg.Type)
+
 	}
 
 	dbCfg.ConnectionString = cnnstr
