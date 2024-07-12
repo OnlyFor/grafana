@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 )
@@ -83,7 +82,6 @@ type DualWriter interface {
 	Storage
 	LegacyStorage
 	Mode() DualWriterMode
-	Sync(context.Context) error
 }
 
 type DualWriterMode int
@@ -103,25 +101,18 @@ const (
 	Mode4
 )
 
-type DualWriterOptions struct {
-	Mode               DualWriterMode
-	Reg                prometheus.Registerer
-	RequestInfo        *request.RequestInfo
-	ServerLockService  ServerLockService
-	DataSyncJobEnabled bool
-}
-
 // TODO: make this function private as there should only be one public way of setting the dual writing mode
 // NewDualWriter returns a new DualWriter.
 func NewDualWriter(
+	mode DualWriterMode,
 	legacy LegacyStorage,
 	storage Storage,
 	kind string,
-	options DualWriterOptions,
+	reg prometheus.Registerer,
 ) DualWriter {
 	metrics := &dualWriterMetrics{}
-	metrics.init(options.Reg)
-	switch options.Mode {
+	metrics.init(reg)
+	switch mode {
 	// It is not possible to initialize a mode 0 dual writer. Mode 0 represents
 	// writing to legacy storage without `unifiedStorage` enabled.
 	case Mode1:
@@ -129,7 +120,7 @@ func NewDualWriter(
 		return newDualWriterMode1(legacy, storage, metrics, kind)
 	case Mode2:
 		// write to both, read from storage but use legacy as backup
-		return newDualWriterMode2(legacy, storage, metrics, kind, options.RequestInfo, options.ServerLockService)
+		return newDualWriterMode2(legacy, storage, metrics, kind)
 	case Mode3:
 		// write to both, read from storage only
 		return newDualWriterMode3(legacy, storage, metrics, kind)
@@ -175,7 +166,6 @@ func SetDualWritingMode(
 	storage Storage,
 	entity string,
 	desiredMode DualWriterMode,
-	options DualWriterOptions,
 ) (DualWriterMode, error) {
 	// Mode0 means no DualWriter
 	if desiredMode == Mode0 {
@@ -216,7 +206,7 @@ func SetDualWritingMode(
 	}
 
 	// Desired mode is 2 and current mode is 1
-	if (options.Mode == Mode2) && (currentMode == Mode1) {
+	if (desiredMode == Mode2) && (currentMode == Mode1) {
 		// This is where we go through the different gates to allow the instance to migrate from mode 1 to mode 2.
 		// There are none between mode 1 and mode 2
 		currentMode = Mode2
@@ -226,7 +216,8 @@ func SetDualWritingMode(
 			return Mode0, errDualWriterSetCurrentMode
 		}
 	}
-	if (options.Mode == Mode1) && (currentMode == Mode2) {
+
+	if (desiredMode == Mode1) && (currentMode == Mode2) {
 		// This is where we go through the different gates to allow the instance to migrate from mode 2 to mode 1.
 		// There are none between mode 1 and mode 2
 		currentMode = Mode1
@@ -234,21 +225,6 @@ func SetDualWritingMode(
 		err := kvs.Set(ctx, entity, fmt.Sprint(currentMode))
 		if err != nil {
 			return Mode0, errDualWriterSetCurrentMode
-		}
-	}
-
-	// 	#TODO add support for other combinations of desired and current modes
-
-	options.Mode = currentMode
-	dualWriter := NewDualWriter(legacy, storage, options)
-
-	// go from 2 to 3
-	if (options.Mode == Mode3) && (currentMode == Mode2) {
-		if options.DataSyncJobEnabled {
-			err = dualWriter.Sync(ctx)
-			if err != nil {
-				return nil, errDualWriterSetCurrentMode
-			}
 		}
 	}
 
