@@ -28,7 +28,6 @@ import (
 	k8stracing "k8s.io/component-base/tracing"
 	"k8s.io/kube-openapi/pkg/common"
 
-	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/web"
 
 	"github.com/grafana/grafana/pkg/apiserver/endpoints/filters"
@@ -156,8 +155,8 @@ func InstallAPIs(
 	builders []APIGroupBuilder,
 	storageOpts *options.StorageOptions,
 	reg prometheus.Registerer,
+	namespaceMapper request.NamespaceMapper,
 	kvStore grafanarest.NamespacedKVStore,
-	cfg *setting.Cfg,
 	serverLock ServerLockService,
 ) error {
 	// dual writing is only enabled when the storage type is not legacy.
@@ -186,13 +185,13 @@ func InstallAPIs(
 			default:
 			}
 
-			if cfg.SectionWithEnvOverrides("unified_storage_data_sync_job_enabled").Key(key).MustBool(false) {
+			if storageOpts.DualWriterDataSyncJobEnabled[key] {
 				if currentMode == 2 {
 					requestInfo := &k8srequest.RequestInfo{
 						APIGroup:  gr.Group,
 						Resource:  gr.Resource,
 						Name:      "",
-						Namespace: request.GetNamespaceMapper(cfg)(int64(1)),
+						Namespace: namespaceMapper(int64(1)),
 					}
 					err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, key, serverLock, requestInfo)
 					if err != nil {
