@@ -1,5 +1,4 @@
 import { produce } from 'immer';
-import { useEffect } from 'react';
 
 import { alertmanagerApi } from 'app/features/alerting/unified/api/alertmanagerApi';
 import { timeIntervalsApi } from 'app/features/alerting/unified/api/timeIntervalsApi';
@@ -18,11 +17,12 @@ import { GRAFANA_RULES_SOURCE_NAME } from 'app/features/alerting/unified/utils/d
 import { MuteTimeInterval } from 'app/plugins/datasource/alertmanager/types';
 import { useDispatch } from 'app/types';
 
-const { useLazyGetAlertmanagerConfigurationQuery } = alertmanagerApi;
+const { useGetAlertmanagerConfigurationQuery, useLazyGetAlertmanagerConfigurationQuery } = alertmanagerApi;
+
 const {
-  useLazyListNamespacedTimeIntervalQuery,
+  useListNamespacedTimeIntervalQuery,
   useCreateNamespacedTimeIntervalMutation,
-  useLazyReadNamespacedTimeIntervalQuery,
+  useReadNamespacedTimeIntervalQuery,
   useReplaceNamespacedTimeIntervalMutation,
   useDeleteNamespacedTimeIntervalMutation,
 } = timeIntervalsApi;
@@ -59,7 +59,7 @@ const parseK8sTimeInterval: (item: TimeIntervalV0Alpha1) => MuteTiming = (item) 
   const { metadata, spec } = item;
   return {
     ...spec,
-    id: metadata.uid || spec.name,
+    id: spec.name,
     metadata,
     provisioned: metadata.annotations?.[PROVENANCE_ANNOTATION] !== PROVENANCE_NONE,
   };
@@ -74,8 +74,8 @@ const parseAmTimeInterval: (interval: MuteTimeInterval, provenance: string) => M
   };
 };
 
-const useAlertmanagerIntervals = () =>
-  useLazyGetAlertmanagerConfigurationQuery({
+const useAlertmanagerIntervals = (...queryOptions: Parameters<typeof useGetAlertmanagerConfigurationQuery>) =>
+  useGetAlertmanagerConfigurationQuery(queryOptions[0], {
     selectFromResult: ({ data, ...rest }) => {
       if (!data) {
         return { data, ...rest };
@@ -92,16 +92,18 @@ const useAlertmanagerIntervals = () =>
         ...rest,
       };
     },
+    ...queryOptions[1],
   });
 
-const useGrafanaAlertmanagerIntervals = () =>
-  useLazyListNamespacedTimeIntervalQuery({
+const useGrafanaAlertmanagerIntervals = (...queryOptions: Parameters<typeof useListNamespacedTimeIntervalQuery>) =>
+  useListNamespacedTimeIntervalQuery(queryOptions[0], {
     selectFromResult: ({ data, ...rest }) => {
       return {
         data: data?.items.map((item) => parseK8sTimeInterval(item)),
         ...rest,
       };
     },
+    ...queryOptions[1],
   });
 
 /**
@@ -114,18 +116,11 @@ const useGrafanaAlertmanagerIntervals = () =>
  */
 export const useMuteTimings = ({ alertmanager }: BaseAlertmanagerArgs) => {
   const useK8sApi = shouldUseK8sApi(alertmanager);
+  const namespace = getNamespace();
 
-  const [getGrafanaTimeIntervals, intervalsResponse] = useGrafanaAlertmanagerIntervals();
-  const [getAlertmanagerTimeIntervals, configApiResponse] = useAlertmanagerIntervals();
+  const intervalsResponse = useGrafanaAlertmanagerIntervals({ namespace }, { skip: !useK8sApi });
+  const configApiResponse = useAlertmanagerIntervals(alertmanager, { skip: useK8sApi });
 
-  useEffect(() => {
-    if (useK8sApi) {
-      const namespace = getNamespace();
-      getGrafanaTimeIntervals({ namespace });
-    } else {
-      getAlertmanagerTimeIntervals(alertmanager);
-    }
-  }, [alertmanager, getAlertmanagerTimeIntervals, getGrafanaTimeIntervals, useK8sApi]);
   return useK8sApi ? intervalsResponse : configApiResponse;
 };
 
@@ -180,21 +175,26 @@ export const useCreateMuteTiming = ({ alertmanager }: BaseAlertmanagerArgs) => {
  */
 export const useGetMuteTiming = ({ alertmanager, name: nameToFind }: BaseAlertmanagerArgs & { name: string }) => {
   const useK8sApi = shouldUseK8sApi(alertmanager);
+  const namespace = getNamespace();
 
-  const [getGrafanaTimeInterval, k8sResponse] = useLazyReadNamespacedTimeIntervalQuery({
-    selectFromResult: ({ data, ...rest }) => {
-      if (!data) {
-        return { data, ...rest };
-      }
+  const k8sResponse = useReadNamespacedTimeIntervalQuery(
+    { namespace, name: nameToFind },
+    {
+      selectFromResult: ({ data, ...rest }) => {
+        if (!data) {
+          return { data, ...rest };
+        }
 
-      return {
-        data: parseK8sTimeInterval(data),
-        ...rest,
-      };
-    },
-  });
+        return {
+          data: parseK8sTimeInterval(data),
+          ...rest,
+        };
+      },
+      skip: !useK8sApi,
+    }
+  );
 
-  const [getAlertmanagerTimeInterval, amConfigApiResponse] = useLazyGetAlertmanagerConfigurationQuery({
+  const amConfigApiResponse = useGetAlertmanagerConfigurationQuery(alertmanager, {
     selectFromResult: ({ data, ...rest }) => {
       if (!data) {
         return { data, ...rest };
@@ -212,16 +212,8 @@ export const useGetMuteTiming = ({ alertmanager, name: nameToFind }: BaseAlertma
       }
       return { ...rest, data: undefined, isError: true };
     },
+    skip: useK8sApi,
   });
-
-  useEffect(() => {
-    if (useK8sApi) {
-      const namespace = getNamespace();
-      getGrafanaTimeInterval({ namespace, name: nameToFind }, true);
-    } else {
-      getAlertmanagerTimeInterval(alertmanager, true);
-    }
-  }, [alertmanager, getAlertmanagerTimeInterval, getGrafanaTimeInterval, nameToFind, useK8sApi]);
 
   return useK8sApi ? k8sResponse : amConfigApiResponse;
 };
@@ -320,7 +312,7 @@ export const useDeleteMuteTiming = ({ alertmanager }: BaseAlertmanagerArgs) => {
 export const useValidateMuteTiming = ({ alertmanager }: BaseAlertmanagerArgs) => {
   const useK8sApi = shouldUseK8sApi(alertmanager);
 
-  const [getIntervals] = useAlertmanagerIntervals();
+  const [getConfig] = useLazyGetAlertmanagerConfigurationQuery();
 
   // If we're using the kubernetes API, then we let the API response handle the validation instead
   // as we don't expect to be able to fetch the intervals via the AM config
@@ -332,7 +324,7 @@ export const useValidateMuteTiming = ({ alertmanager }: BaseAlertmanagerArgs) =>
     if (skipValidation) {
       return;
     }
-    return getIntervals(alertmanager)
+    return getConfig(alertmanager)
       .unwrap()
       .then((config) => {
         const intervals = mergeTimeIntervals(config.alertmanager_config);
