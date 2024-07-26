@@ -57,7 +57,7 @@ const SHOULD_POLL_STATUSES: Array<SnapshotDto['status']> = [
   'PROCESSING',
 ];
 
-const SNAPSHOT_REBUILD_STATUSES: Array<SnapshotDto['status']> = ['PENDING_PROCESSING', 'FINISHED', 'ERROR', 'UNKNOWN'];
+const SNAPSHOT_REBUILD_STATUSES: Array<SnapshotDto['status']> = ['PENDING_UPLOAD', 'FINISHED', 'ERROR', 'UNKNOWN'];
 
 const SNAPSHOT_BUILDING_STATUSES: Array<SnapshotDto['status']> = ['INITIALIZING', 'CREATING'];
 
@@ -78,6 +78,11 @@ function useGetLatestSnapshot(sessionUid?: string) {
     skipPollingIfUnfocused: true,
   });
 
+  // If the GetSnapshot query is still returning cached data for a snapshot that's no longer the latest,
+  // consider it as 'stale' and don't show it
+  const snapshotIsStale = snapshotResult.data?.uid !== lastItem?.uid;
+  const snapshotData = snapshotIsStale ? undefined : snapshotResult.data;
+
   useEffect(() => {
     const shouldPoll = SHOULD_POLL_STATUSES.includes(snapshotResult.data?.status);
     setShouldPoll(shouldPoll);
@@ -85,13 +90,14 @@ function useGetLatestSnapshot(sessionUid?: string) {
 
   return {
     ...snapshotResult,
+    data: snapshotData,
 
     error: listResult.error || snapshotResult.error,
 
     // isSuccess and isUninitialised should always be from snapshotResult
     // as only the 'final' values from those are important
     isError: listResult.isError || snapshotResult.isError,
-    isLoading: listResult.isLoading || snapshotResult.isLoading,
+    isLoading: listResult.isLoading || snapshotResult.isLoading || snapshotIsStale,
     isFetching: listResult.isFetching || snapshotResult.isFetching,
   };
 }
