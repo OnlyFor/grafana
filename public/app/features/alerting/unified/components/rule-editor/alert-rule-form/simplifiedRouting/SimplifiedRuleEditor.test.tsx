@@ -143,7 +143,7 @@ describe('Can create a new grafana managed alert unsing simplified routing', () 
 
     config.featureToggles.alertingSimplifiedRouting = true;
     renderSimplifiedRuleEditor();
-    await waitForElementToBeRemoved(screen.getAllByTestId('Spinner'));
+    await waitForElementToBeRemoved(screen.queryAllByTestId('Spinner'));
 
     await user.type(await ui.inputs.name.find(), 'my great new rule');
 
@@ -157,16 +157,14 @@ describe('Can create a new grafana managed alert unsing simplified routing', () 
     // do not select a contact point
     // save and check that call to backend was not made
     await user.click(ui.buttons.saveAndExit.get());
-    await waitFor(() => {
-      expect(screen.getByText('Contact point is required.')).toBeInTheDocument();
-      expect(mocks.api.setRulerRuleGroup).not.toHaveBeenCalled();
-    });
+    expect(await screen.findByText('Contact point is required.')).toBeInTheDocument();
+    expect(mocks.api.setRulerRuleGroup).not.toHaveBeenCalled();
   });
   it('simplified routing is not available when Grafana AM is not enabled', async () => {
     config.featureToggles.alertingSimplifiedRouting = true;
     setAlertmanagerChoices(AlertmanagerChoice.External, 1);
     renderSimplifiedRuleEditor();
-    await waitForElementToBeRemoved(screen.getAllByTestId('Spinner'));
+    await waitForElementToBeRemoved(screen.queryAllByTestId('Spinner'));
 
     expect(ui.inputs.simplifiedRouting.contactPointRouting.query()).not.toBeInTheDocument();
   });
@@ -221,7 +219,7 @@ describe('Can create a new grafana managed alert unsing simplified routing', () 
 
     config.featureToggles.alertingSimplifiedRouting = true;
     renderSimplifiedRuleEditor();
-    await waitForElementToBeRemoved(screen.getAllByTestId('Spinner'));
+    await waitForElementToBeRemoved(screen.queryAllByTestId('Spinner'));
 
     await user.type(await ui.inputs.name.find(), 'my great new rule');
 
