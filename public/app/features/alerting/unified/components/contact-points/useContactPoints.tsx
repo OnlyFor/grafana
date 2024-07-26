@@ -6,6 +6,8 @@
 import { produce } from 'immer';
 import { remove } from 'lodash';
 
+import { cloudNotifierTypes } from 'app/features/alerting/unified/utils/cloud-alertmanager-notifier-types';
+
 import { alertmanagerApi } from '../../api/alertmanagerApi';
 import { onCallApi, OnCallIntegrationDTO } from '../../api/onCallApi';
 import { usePluginBridge } from '../../hooks/usePluginBridge';
@@ -88,7 +90,7 @@ export function useContactPointsWithStatus({
         contactPoints: result.data
           ? enhanceContactPointsWithMetadata(
               fetchContactPointsStatus.data,
-              fetchReceiverMetadata.data,
+              isGrafanaAlertmanager ? fetchReceiverMetadata.data : cloudNotifierTypes,
               onCallMetadata,
               result.data.alertmanager_config.receivers ?? [],
               result.data
