@@ -814,6 +814,9 @@
       "split-widen": "Widen pane"
     }
   },
+  "explore-metrics": {
+    "viewBy": "View by"
+  },
   "export": {
     "json": {
       "cancel-button": "Cancel",
@@ -1089,6 +1092,11 @@
       "link-title": "Grafana Cloud pricing",
       "title": "How much does it cost?"
     },
+    "public-preview": {
+      "button-text": "Give feedback",
+      "message": "Help us improve this feature by providing feedback and reporting any issues.",
+      "title": "Migrate to Grafana Cloud is in public preview"
+    },
     "resource-status": {
       "error-details-button": "Details",
       "failed": "Error",
@@ -1113,8 +1121,10 @@
       "disconnect-error-description": "See the Grafana server logs for more details",
       "disconnect-error-title": "There was an error disconnecting",
       "errored-resource-count": "Errors",
+      "page-loading": "Loading...",
+      "rebuild-snapshot": "Rebuild snapshot",
       "run-migration-error-description": "See the Grafana server logs for more details",
-      "run-migration-error-title": "There was an error migrating your resources",
+      "run-migration-error-title": "Error creating snapshot",
       "snapshot-date": "Snapshot timestamp",
       "snapshot-not-created": "Not yet created",
       "start-migration": "Build snapshot",
