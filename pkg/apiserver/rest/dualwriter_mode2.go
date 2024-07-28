@@ -418,7 +418,7 @@ func enrichLegacyObject(originalObj, returnedObj runtime.Object) error {
 
 func getSyncRequester(orgId int64) *identity.StaticRequester {
 	return &identity.StaticRequester{
-		Namespace:      identity.NamespaceServiceAccount, // system:apiserver
+		Type:           identity.TypeServiceAccount, // system:apiserver
 		UserID:         1,
 		OrgID:          orgId,
 		Name:           "admin",
@@ -457,6 +457,8 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 	log := klog.NewKlogr().WithName("DualWriterMode2Syncer")
 
 	err := serverLockService.LockExecuteAndRelease(ctx, "dualwriter mode 2 sync", time.Minute*30, func(context.Context) {
+		log.Info("starting dualwriter mode 2 sync")
+
 		orgId := int64(1)
 
 		ctx = klog.NewContext(ctx, log)
@@ -469,12 +471,14 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 			log.Error(err, "unable to extract list from legacy storage")
 			return
 		}
+		log.Info("got items from legacy storage", "items", len(legacyList))
 
 		storageList, err := getList(ctx, storage, &metainternalversion.ListOptions{})
 		if err != nil {
 			log.Error(err, "unable to extract list from storage")
 			return
 		}
+		log.Info("got items from unified storage", "items", len(storageList))
 
 		itemsByName := map[string]syncItem{}
 		for _, obj := range legacyList {
@@ -510,6 +514,7 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 			item.objStorage = obj
 			itemsByName[name] = item
 		}
+		log.Info("got list of items to be synced", "items", len(itemsByName))
 
 		for name, item := range itemsByName {
 			// upsert if:
@@ -522,7 +527,7 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 					log.Error(err, "error retrieving accessor data for object from storage")
 					continue
 				}
-				accessor.SetResourceVersionInt64(0)
+				accessor.SetResourceVersion("")
 				accessor.SetUID("")
 
 				if item.objStorage != nil {
@@ -533,6 +538,10 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 					}
 					accessor.SetResourceVersion(accessorStorage.GetResourceVersion())
 					accessor.SetUID(accessorStorage.GetUID())
+
+					log.Info("updating item on unified storage", "name", name)
+				} else {
+					log.Info("inserting item on unified storage", "name", name)
 				}
 
 				objInfo := rest.DefaultUpdatedObjectInfo(item.objLegacy, []rest.TransformFunc{}...)
@@ -558,7 +567,9 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 					Namespace: requestInfo.Namespace,
 				})
 
-				deletedS, _, err := storage.Delete(ctx, name, nil, &metav1.DeleteOptions{})
+				log.Info("deleting item from unified storage", "name", name)
+
+				deletedS, _, err := storage.Delete(ctx, name, func(ctx context.Context, obj runtime.Object) error { return nil }, &metav1.DeleteOptions{})
 				if err != nil {
 					if !apierrors.IsNotFound(err) {
 						log.WithValues("objectList", deletedS).Error(err, "could not delete from storage")
@@ -566,12 +577,13 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 				}
 			}
 		}
+		log.Info("finished syncing items")
 	})
+	metrics.recordSyncDuration(err != nil, mode2Str, startSync)
+
 	if err != nil {
 		log.Error(err, "Server lock for dualwriter mode 2 sync already exists")
 	}
 
-	metrics.recordSyncDuration(err != nil, mode2Str, startSync)
-
-	return err
+	return nil
 }
