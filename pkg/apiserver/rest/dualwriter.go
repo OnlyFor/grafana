@@ -107,8 +107,8 @@ func NewDualWriter(
 	mode DualWriterMode,
 	legacy LegacyStorage,
 	storage Storage,
-	kind string,
 	reg prometheus.Registerer,
+	kind string,
 ) DualWriter {
 	metrics := &dualWriterMetrics{}
 	metrics.init(reg)

@@ -193,7 +193,7 @@ func InstallAPIs(
 						Name:      "",
 						Namespace: namespaceMapper(int64(1)),
 					}
-					err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, key, serverLock, requestInfo)
+					err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
 					if err != nil {
 						return nil, err
 					}
