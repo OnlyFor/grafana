@@ -180,9 +180,12 @@ func InstallAPIs(
 			// when missing this will default to mode zero (legacy only)
 			mode := storageOpts.DualWriterDesiredModes[key]
 
+			// TODO: inherited context from main Grafana process
+			ctx := context.Background()
+
 			// Moving from one version to the next can only happen after the previous step has
 			// successfully synchronized.
-			currentMode, err := grafanarest.SetDualWritingMode(context.Background(), kvStore, legacy, storage, key, mode, reg, serverLock, getRequestInfo(gr, namespaceMapper))
+			currentMode, err := grafanarest.SetDualWritingMode(ctx, kvStore, legacy, storage, key, mode, reg, serverLock, getRequestInfo(gr, namespaceMapper))
 			if err != nil {
 				return nil, err
 			}
@@ -195,7 +198,7 @@ func InstallAPIs(
 			}
 
 			if storageOpts.DualWriterDataSyncJobEnabled[key] {
-				grafanarest.StartPeriodicDataSyncer(context.Background(), currentMode, legacy, storage, key, reg, serverLock, getRequestInfo(gr, namespaceMapper))
+				grafanarest.StartPeriodicDataSyncer(ctx, currentMode, legacy, storage, key, reg, serverLock, getRequestInfo(gr, namespaceMapper))
 			}
 			return grafanarest.NewDualWriter(currentMode, legacy, storage, reg, key), nil
 		}

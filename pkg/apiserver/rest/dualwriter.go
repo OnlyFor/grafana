@@ -236,7 +236,7 @@ func SetDualWritingMode(
 		// This is where we go through the different gates to allow the instance to migrate from mode 1 to mode 3.
 
 		// gate #1: ensure the data is 100% in sync
-		syncOk, err := runDataSyncer(context.Background(), currentMode, legacy, storage, entity, reg, serverLockService, requestInfo)
+		syncOk, err := runDataSyncer(ctx, currentMode, legacy, storage, entity, reg, serverLockService, requestInfo)
 		if err != nil {
 			klog.Info("data syncer failed for mode:", m)
 			return Mode0, errDualWriterSetCurrentMode
@@ -301,6 +301,8 @@ const dataSyncerInterval = 60 * time.Minute
 // StartPeriodicDataSyncer starts a background job that will execute the DataSyncer every 60 minutes
 func StartPeriodicDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorage, storage Storage,
 	kind string, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) {
+	klog.Info("Starting periodic data syncer for mode mode: ", mode)
+
 	// run in background
 	go func() {
 		// run it immediately
@@ -332,7 +334,7 @@ func runDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorag
 	case Mode2:
 		return mode2DataSyncer(ctx, legacy, storage, kind, reg, serverLockService, requestInfo)
 	default:
-		klog.Info("data syncer not implemented for mode mode:", mode)
+		klog.Error("data syncer not implemented for mode mode:", mode)
 		return false, nil
 	}
 }
