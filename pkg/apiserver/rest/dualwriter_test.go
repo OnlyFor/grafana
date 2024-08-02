@@ -65,15 +65,6 @@ func TestSetDualWritingMode(t *testing.T) {
 	}
 }
 
-// Never lock in tests
-type fakeServerLock struct {
-}
-
-func (f *fakeServerLock) LockExecuteAndRelease(ctx context.Context, actionName string, duration time.Duration, fn func(ctx context.Context)) error {
-	fn(ctx)
-	return nil
-}
-
 func TestCompare(t *testing.T) {
 	var examplePlaylistGen1 = &playlist.Playlist{ObjectMeta: metav1.ObjectMeta{Generation: 1}, Spec: playlist.Spec{Title: "Example Playlist"}}
 	var examplePlaylistGen2 = &playlist.Playlist{ObjectMeta: metav1.ObjectMeta{Generation: 2}, Spec: playlist.Spec{Title: "Example Playlist"}}
@@ -129,5 +120,14 @@ func (f *fakeNamespacedKV) Get(ctx context.Context, key string) (string, bool, e
 
 func (f *fakeNamespacedKV) Set(ctx context.Context, key, value string) error {
 	f.data[f.namespace+key] = value
+	return nil
+}
+
+// Never lock in tests
+type fakeServerLock struct {
+}
+
+func (f *fakeServerLock) LockExecuteAndRelease(ctx context.Context, actionName string, duration time.Duration, fn func(ctx context.Context)) error {
+	fn(ctx)
 	return nil
 }

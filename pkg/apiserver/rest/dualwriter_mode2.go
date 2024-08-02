@@ -597,7 +597,7 @@ func mode2DataSyncer(ctx context.Context, legacy LegacyStorage, storage Storage,
 		metrics.recordDataSyncerOutcome(mode2Str, kind, everythingSynced)
 		metrics.recordDataSyncerDuration(err != nil, mode2Str, kind, startSync)
 
-		log.Info("finished syncing items", "items", len(itemsByName), "failed", syncErr, "outcome", everythingSynced)
+		log.Info("finished syncing items", "items", len(itemsByName), "updated", syncSuccess, "failed", syncErr, "outcome", everythingSynced)
 	})
 
 	if err != nil {
