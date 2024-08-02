@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/endpoints/request"
 
 	// nolint:depguard
 	playlist "github.com/grafana/grafana/pkg/apis/playlist/v0alpha1"
@@ -51,7 +53,7 @@ func TestSetDualWritingMode(t *testing.T) {
 
 		kvStore := &fakeNamespacedKV{data: make(map[string]string), namespace: "storage.dualwriting." + tt.stackID}
 
-		dwMode, err := SetDualWritingMode(context.Background(), kvStore, ls, us, "playlist.grafana.app/v0alpha1", tt.desiredMode)
+		dwMode, err := SetDualWritingMode(context.Background(), kvStore, ls, us, "playlist.grafana.app/v0alpha1", tt.desiredMode, p, &fakeServerLock{}, &request.RequestInfo{})
 		assert.NoError(t, err)
 		assert.Equal(t, tt.expectedMode, dwMode)
 
@@ -61,6 +63,15 @@ func TestSetDualWritingMode(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, val, fmt.Sprint(tt.expectedMode))
 	}
+}
+
+// Never lock in tests
+type fakeServerLock struct {
+}
+
+func (f *fakeServerLock) LockExecuteAndRelease(ctx context.Context, actionName string, duration time.Duration, fn func(ctx context.Context)) error {
+	fn(ctx)
+	return nil
 }
 
 func TestCompare(t *testing.T) {
