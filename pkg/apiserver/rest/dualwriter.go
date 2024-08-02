@@ -298,24 +298,21 @@ func getName(o runtime.Object) string {
 
 const dataSyncerInterval = 60 * time.Minute
 
-// RunPeriodicDataSyncerJob starts a background job that will execute the DataSyncer every 60 minutes
-func RunPeriodicDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorage, storage Storage,
+// StartPeriodicDataSyncer starts a background job that will execute the DataSyncer every 60 minutes
+func StartPeriodicDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorage, storage Storage,
 	kind string, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) {
-
 	// run in background
 	go func() {
 		// run it immediately
-		// TODO: log results
-		runDataSyncer(ctx, mode, legacy, storage, kind, reg, serverLockService, requestInfo)
+		_, _ = runDataSyncer(ctx, mode, legacy, storage, kind, reg, serverLockService, requestInfo)
 
 		ticker := time.NewTicker(dataSyncerInterval)
 		for {
 			select {
 			case <-ticker.C:
-				// TODO: log results
-				runDataSyncer(ctx, mode, legacy, storage, kind, reg, serverLockService, requestInfo)
+				_, _ = runDataSyncer(ctx, mode, legacy, storage, kind, reg, serverLockService, requestInfo)
 			case <-ctx.Done():
-				break
+				return
 			}
 		}
 	}()
@@ -325,7 +322,6 @@ func RunPeriodicDataSyncer(ctx context.Context, mode DualWriterMode, legacy Lega
 // The sync implementation depends on the DualWriter mode
 func runDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorage, storage Storage,
 	kind string, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) (bool, error) {
-
 	// ensure that execution takes no longer than necessary
 	const timeout = dataSyncerInterval - time.Minute
 	ctx, cancelFn := context.WithTimeout(ctx, timeout)

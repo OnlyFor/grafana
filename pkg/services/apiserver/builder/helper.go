@@ -195,7 +195,7 @@ func InstallAPIs(
 			}
 
 			if storageOpts.DualWriterDataSyncJobEnabled[key] {
-				grafanarest.RunPeriodicDataSyncer(context.Background(), currentMode, legacy, storage, key, reg, serverLock, getRequestInfo(gr, namespaceMapper))
+				grafanarest.StartPeriodicDataSyncer(context.Background(), currentMode, legacy, storage, key, reg, serverLock, getRequestInfo(gr, namespaceMapper))
 			}
 			return grafanarest.NewDualWriter(currentMode, legacy, storage, reg, key), nil
 		}
