@@ -236,8 +236,9 @@ func SetDualWritingMode(
 		// This is where we go through the different gates to allow the instance to migrate from mode 1 to mode 3.
 
 		// gate #1: ensure the data is 100% in sync
-		syncOk, err := runDataSyncer(context.Background(), currentMode, legacy, storage, reg, serverLockService, requestInfo)
+		syncOk, err := runDataSyncer(context.Background(), currentMode, legacy, storage, entity, reg, serverLockService, requestInfo)
 		if err != nil {
+			klog.Info("data syncer failed for mode:", m)
 			return Mode0, errDualWriterSetCurrentMode
 		}
 
@@ -295,23 +296,24 @@ func getName(o runtime.Object) string {
 	return accessor.GetName()
 }
 
+const dataSyncerInterval = 60 * time.Minute
+
 // RunPeriodicDataSyncerJob starts a background job that will execute the DataSyncer every 60 minutes
 func RunPeriodicDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorage, storage Storage,
-	reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) {
+	kind string, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) {
 
 	// run in background
 	go func() {
 		// run it immediately
 		// TODO: log results
-		runDataSyncer(ctx, mode, legacy, storage, reg, serverLockService, requestInfo)
+		runDataSyncer(ctx, mode, legacy, storage, kind, reg, serverLockService, requestInfo)
 
-		// ticker executes at every 60 minutes
-		ticker := time.NewTicker(time.Minute * 6)
+		ticker := time.NewTicker(dataSyncerInterval)
 		for {
 			select {
 			case <-ticker.C:
 				// TODO: log results
-				runDataSyncer(ctx, mode, legacy, storage, reg, serverLockService, requestInfo)
+				runDataSyncer(ctx, mode, legacy, storage, kind, reg, serverLockService, requestInfo)
 			case <-ctx.Done():
 				break
 			}
@@ -322,18 +324,19 @@ func RunPeriodicDataSyncer(ctx context.Context, mode DualWriterMode, legacy Lega
 // runDataSyncer will ensure that data between legacy storage and unified storage are in sync.
 // The sync implementation depends on the DualWriter mode
 func runDataSyncer(ctx context.Context, mode DualWriterMode, legacy LegacyStorage, storage Storage,
-	reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) (bool, error) {
+	kind string, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) (bool, error) {
 
-	// ensure that execution takes no longer than 59 minutes
-	const timeout = 59 * time.Minute
+	// ensure that execution takes no longer than necessary
+	const timeout = dataSyncerInterval - time.Minute
 	ctx, cancelFn := context.WithTimeout(ctx, timeout)
 	defer cancelFn()
 
 	// implementation depends on the desired DualWriter mode
 	switch mode {
 	case Mode2:
-		return mode2DataSyncer(ctx, legacy, storage, reg, serverLockService, requestInfo)
+		return mode2DataSyncer(ctx, legacy, storage, kind, reg, serverLockService, requestInfo)
 	default:
+		klog.Info("data syncer not implemented for mode mode:", mode)
 		return false, nil
 	}
 }

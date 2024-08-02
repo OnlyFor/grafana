@@ -9,10 +9,11 @@ import (
 )
 
 type dualWriterMetrics struct {
-	legacy  *prometheus.HistogramVec
-	storage *prometheus.HistogramVec
-	outcome *prometheus.HistogramVec
-	sync    *prometheus.HistogramVec
+	legacy        *prometheus.HistogramVec
+	storage       *prometheus.HistogramVec
+	outcome       *prometheus.HistogramVec
+	syncer        *prometheus.HistogramVec
+	syncerOutcome *prometheus.HistogramVec
 }
 
 // DualWriterStorageDuration is a metric summary for dual writer storage duration per mode
@@ -45,25 +46,35 @@ var DualWriterReadLegacyCounts = prometheus.NewCounterVec(prometheus.CounterOpts
 	Namespace: "grafana",
 }, []string{"kind", "method"})
 
-// DualWriterSyncDuration is a metric summary for dual writer sync duration per mode
-var DualWriterSyncDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Name:                        "dual_writer_sync_duration_seconds",
-	Help:                        "Histogram for the runtime of dual writer sync duration per mode",
+// DualWriterSyncerDuration is a metric summary for dual writer sync duration per mode
+var DualWriterSyncerDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Name:                        "dual_writer_data_syncer_duration_seconds",
+	Help:                        "Histogram for the runtime of dual writer data syncer duration per mode",
 	Namespace:                   "grafana",
 	NativeHistogramBucketFactor: 1.1,
-}, []string{"is_error", "mode"})
+}, []string{"is_error", "mode", "kind"})
+
+// DualWriterDataSyncerOutcome is a metric summary for dual writer data syncer outcome comparison between the 2 stores per mode
+var DualWriterDataSyncerOutcome = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Name:                        "dual_writer_data_syncer_outcome",
+	Help:                        "Histogram for the runtime of dual writer data syncer outcome comparison between the 2 stores per mode",
+	Namespace:                   "grafana",
+	NativeHistogramBucketFactor: 1.1,
+}, []string{"mode", "kind"})
 
 func (m *dualWriterMetrics) init(reg prometheus.Registerer) {
 	log := klog.NewKlogr()
 	m.legacy = DualWriterLegacyDuration
 	m.storage = DualWriterStorageDuration
 	m.outcome = DualWriterOutcome
-	m.sync = DualWriterSyncDuration
+	m.syncer = DualWriterSyncerDuration
+	m.syncerOutcome = DualWriterDataSyncerOutcome
 	errLegacy := reg.Register(m.legacy)
 	errStorage := reg.Register(m.storage)
 	errOutcome := reg.Register(m.outcome)
-	errSync := reg.Register(m.sync)
-	if errLegacy != nil || errStorage != nil || errOutcome != nil || errSync != nil {
+	errSyncer := reg.Register(m.syncer)
+	errSyncerOutcome := reg.Register(m.syncer)
+	if errLegacy != nil || errStorage != nil || errOutcome != nil || errSyncer != nil || errSyncerOutcome != nil {
 		log.Info("cloud migration metrics already registered")
 	}
 }
@@ -86,7 +97,15 @@ func (m *dualWriterMetrics) recordOutcome(mode string, name string, areEqual boo
 	m.outcome.WithLabelValues(mode, name, method).Observe(observeValue)
 }
 
-func (m *dualWriterMetrics) recordSyncDuration(isError bool, mode string, startFrom time.Time) {
+func (m *dualWriterMetrics) recordDataSyncerDuration(isError bool, mode string, kind string, startFrom time.Time) {
 	duration := time.Since(startFrom).Seconds()
-	m.sync.WithLabelValues(strconv.FormatBool(isError), mode).Observe(duration)
+	m.syncer.WithLabelValues(strconv.FormatBool(isError), mode, kind).Observe(duration)
+}
+
+func (m *dualWriterMetrics) recordDataSyncerOutcome(mode string, kind string, synced bool) {
+	var observeValue float64
+	if !synced {
+		observeValue = 1
+	}
+	m.syncerOutcome.WithLabelValues(mode, kind).Observe(observeValue)
 }

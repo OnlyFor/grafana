@@ -448,11 +448,9 @@ func getList(ctx context.Context, obj rest.Lister, listOptions *metainternalvers
 	return meta.ExtractList(ll)
 }
 
-func mode2DataSyncer(ctx context.Context, legacy LegacyStorage, storage Storage, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) (bool, error) {
+func mode2DataSyncer(ctx context.Context, legacy LegacyStorage, storage Storage, kind string, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) (bool, error) {
 	metrics := &dualWriterMetrics{}
 	metrics.init(reg)
-
-	startSync := time.Now()
 
 	log := klog.NewKlogr().WithName("DualWriterMode2Syncer")
 
@@ -463,6 +461,7 @@ func mode2DataSyncer(ctx context.Context, legacy LegacyStorage, storage Storage,
 
 	err := serverLockService.LockExecuteAndRelease(ctx, "dualwriter mode 2 sync", time.Minute*30, func(context.Context) {
 		log.Info("starting dualwriter mode 2 sync")
+		startSync := time.Now()
 
 		orgId := int64(1)
 
@@ -595,9 +594,11 @@ func mode2DataSyncer(ctx context.Context, legacy LegacyStorage, storage Storage,
 
 		everythingSynced = outOfSync == syncSuccess
 
-		log.Info("finished syncing items")
+		metrics.recordDataSyncerOutcome(mode2Str, kind, everythingSynced)
+		metrics.recordDataSyncerDuration(err != nil, mode2Str, kind, startSync)
+
+		log.Info("finished syncing items", "items", len(itemsByName), "failed", syncErr, "outcome", everythingSynced)
 	})
-	metrics.recordSyncDuration(err != nil, mode2Str, startSync)
 
 	if err != nil {
 		log.Error(err, "Server lock for dualwriter mode 2 sync already exists")
