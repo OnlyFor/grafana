@@ -60,7 +60,7 @@ func applyGrafanaConfig(cfg *setting.Cfg, features featuremgmt.FeatureToggles, o
 		playlist.GROUPRESOURCE: 2,
 	}
 	o.StorageOptions.DualWriterDataSyncJobEnabled = map[string]bool{
-		playlist.RESOURCE + "." + playlist.GROUP: unifiedStorageDataSyncJobEnabledCfg.Key(playlist.RESOURCE + "." + playlist.GROUP).MustBool(false),
+		playlist.RESOURCE + "." + playlist.GROUP: true,
 	}
 
 	// TODO: ensure backwards compatibility with production
