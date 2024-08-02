@@ -147,6 +147,15 @@ type ServerLockService interface {
 	LockExecuteAndRelease(ctx context.Context, actionName string, maxInterval time.Duration, fn func(ctx context.Context)) error
 }
 
+func getRequestInfo(gr schema.GroupResource, namespaceMapper request.NamespaceMapper) *k8srequest.RequestInfo {
+	return &k8srequest.RequestInfo{
+		APIGroup:  gr.Group,
+		Resource:  gr.Resource,
+		Name:      "",
+		Namespace: namespaceMapper(int64(1)),
+	}
+}
+
 func InstallAPIs(
 	scheme *runtime.Scheme,
 	codecs serializer.CodecFactory,
@@ -173,7 +182,7 @@ func InstallAPIs(
 
 			// Moving from one version to the next can only happen after the previous step has
 			// successfully synchronized.
-			currentMode, err := grafanarest.SetDualWritingMode(context.Background(), kvStore, legacy, storage, key, mode)
+			currentMode, err := grafanarest.SetDualWritingMode(context.Background(), kvStore, legacy, storage, key, mode, reg, serverLock, getRequestInfo(gr, namespaceMapper))
 			if err != nil {
 				return nil, err
 			}
@@ -186,18 +195,7 @@ func InstallAPIs(
 			}
 
 			if storageOpts.DualWriterDataSyncJobEnabled[key] {
-				if currentMode == 2 {
-					requestInfo := &k8srequest.RequestInfo{
-						APIGroup:  gr.Group,
-						Resource:  gr.Resource,
-						Name:      "",
-						Namespace: namespaceMapper(int64(1)),
-					}
-					err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
-					if err != nil {
-						return nil, err
-					}
-				}
+				grafanarest.RunPeriodicDataSyncer(context.Background(), currentMode, legacy, storage, reg, serverLock, getRequestInfo(gr, namespaceMapper))
 			}
 			return grafanarest.NewDualWriter(currentMode, legacy, storage, reg, key), nil
 		}

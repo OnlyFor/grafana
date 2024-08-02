@@ -448,13 +448,18 @@ func getList(ctx context.Context, obj rest.Lister, listOptions *metainternalvers
 	return meta.ExtractList(ll)
 }
 
-func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Storage, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) error {
+func mode2DataSyncer(ctx context.Context, legacy LegacyStorage, storage Storage, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) (bool, error) {
 	metrics := &dualWriterMetrics{}
 	metrics.init(reg)
 
 	startSync := time.Now()
 
 	log := klog.NewKlogr().WithName("DualWriterMode2Syncer")
+
+	everythingSynced := false
+	outOfSync := 0
+	syncSuccess := 0
+	syncErr := 0
 
 	err := serverLockService.LockExecuteAndRelease(ctx, "dualwriter mode 2 sync", time.Minute*30, func(context.Context) {
 		log.Info("starting dualwriter mode 2 sync")
@@ -522,6 +527,8 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 			// - if it's missing from storage
 			if item.objLegacy != nil &&
 				((item.objStorage != nil && !Compare(item.objLegacy, item.objStorage)) || (item.objStorage == nil)) {
+				outOfSync++
+
 				accessor, err := utils.MetaAccessor(item.objLegacy)
 				if err != nil {
 					log.Error(err, "error retrieving accessor data for object from storage")
@@ -555,11 +562,16 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 				)
 				if err != nil {
 					log.WithValues("object", res).Error(err, "could not update in storage")
+					syncErr++
+				} else {
+					syncSuccess++
 				}
 			}
 
 			// delete if object does not exists on legacy but exists on storage
 			if item.objLegacy == nil && item.objStorage != nil {
+				outOfSync++
+
 				ctx = request.WithRequestInfo(ctx, &request.RequestInfo{
 					APIGroup:  requestInfo.APIGroup,
 					Resource:  requestInfo.Resource,
@@ -574,9 +586,15 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 					if !apierrors.IsNotFound(err) {
 						log.WithValues("objectList", deletedS).Error(err, "could not delete from storage")
 					}
+					syncErr++
+				} else {
+					syncSuccess++
 				}
 			}
 		}
+
+		everythingSynced = outOfSync == syncSuccess
+
 		log.Info("finished syncing items")
 	})
 	metrics.recordSyncDuration(err != nil, mode2Str, startSync)
@@ -585,5 +603,5 @@ func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Stor
 		log.Error(err, "Server lock for dualwriter mode 2 sync already exists")
 	}
 
-	return nil
+	return everythingSynced, nil
 }
