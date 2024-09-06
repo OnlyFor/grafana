@@ -18,6 +18,8 @@ import { getPluginSettings } from '../pluginSettings';
 import { importAppPlugin } from '../plugin_loader';
 
 import AppRootPage from './AppRootPage';
+import { setupPluginExtensionRegistries } from '../extensions/registry/setup';
+import { ExtensionRegistriesProvider } from '../extensions/ExtensionRegistriesContext';
 
 jest.mock('../pluginSettings', () => ({
   getPluginSettings: jest.fn(),
@@ -88,6 +90,7 @@ async function renderUnderRouter(page = '') {
 
   appPluginNavItem.parentItem = appsSection;
 
+  const registries = setupPluginExtensionRegistries();
   const pagePath = page ? `/${page}` : '';
   const store = configureStore();
   const route = {
@@ -102,7 +105,13 @@ async function renderUnderRouter(page = '') {
     <Router history={locationService.getHistory()}>
       <Provider store={store}>
         <GrafanaContext.Provider value={getGrafanaContextMock()}>
-          <Route path={`/a/:pluginId${pagePath}`} exact render={(props) => <GrafanaRoute {...props} route={route} />} />
+          <ExtensionRegistriesProvider registries={registries}>
+            <Route
+              path={`/a/:pluginId${pagePath}`}
+              exact
+              render={(props) => <GrafanaRoute {...props} route={route} />}
+            />
+          </ExtensionRegistriesProvider>
         </GrafanaContext.Provider>
       </Provider>
     </Router>
