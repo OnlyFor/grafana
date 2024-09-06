@@ -14,12 +14,12 @@ import { contextSrv } from 'app/core/services/context_srv';
 import { Echo } from 'app/core/services/echo/Echo';
 import { configureStore } from 'app/store/configureStore';
 
+import { ExtensionRegistriesProvider } from '../extensions/ExtensionRegistriesContext';
+import { setupPluginExtensionRegistries } from '../extensions/registry/setup';
 import { getPluginSettings } from '../pluginSettings';
 import { importAppPlugin } from '../plugin_loader';
 
 import AppRootPage from './AppRootPage';
-import { setupPluginExtensionRegistries } from '../extensions/registry/setup';
-import { ExtensionRegistriesProvider } from '../extensions/ExtensionRegistriesContext';
 
 jest.mock('../pluginSettings', () => ({
   getPluginSettings: jest.fn(),

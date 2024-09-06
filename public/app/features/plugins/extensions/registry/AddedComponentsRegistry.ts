@@ -19,7 +19,10 @@ export type AddedComponentRegistryItem<Props = {}> = {
   component: React.ComponentType<Props>;
 };
 
-export class AddedComponentsRegistry extends Registry<AddedComponentRegistryItem[], PluginExtensionAddedComponentConfig> {
+export class AddedComponentsRegistry extends Registry<
+  AddedComponentRegistryItem[],
+  PluginExtensionAddedComponentConfig
+> {
   constructor(
     options: {
       registrySubject?: ReplaySubject<RegistryType<AddedComponentRegistryItem[]>>;
