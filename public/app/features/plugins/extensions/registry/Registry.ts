@@ -2,6 +2,8 @@ import { Observable, ReplaySubject, Subject, firstValueFrom, map, scan, startWit
 
 import { deepFreeze } from '../utils';
 
+export const MSG_CANNOT_REGISTER_READ_ONLY = 'Cannot register to a read-only registry';
+
 export type PluginExtensionConfigs<T> = {
   pluginId: string;
   configs: T[];
@@ -55,7 +57,7 @@ export abstract class Registry<TRegistryValue, TMapType> {
 
   register(result: PluginExtensionConfigs<TMapType>): void {
     if (this.isReadOnly) {
-      throw new Error('Cannot register to a read-only registry');
+      throw new Error(MSG_CANNOT_REGISTER_READ_ONLY);
     }
 
     this.resultSubject.next(result);
